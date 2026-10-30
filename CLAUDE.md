@@ -13,19 +13,20 @@ document), pages get visitors, and paragraphs can open with a decorated initial;
 
 | file | what |
 |---|---|
-| `florilegium.sty` | thin TeX layer: options `authored` (default) / `grown`, `nomargin`, `novisitors`, `sections`, `aging`; colors `ink` and `accent`; `\florilegiumdraw`, `\florilegiumtextend`, `\florilegiumbloom`, `\florilegiumage`, `\florilegiuminitial`, `\florilegiuminitialfont`, `\florilegiumframe`; the shipout hook. LuaLaTeX only. |
+| `florilegium.sty` | thin TeX layer: options `authored` (default) / `grown`, `nomargin`, `novisitors`, `sections`, `aging`, `pagenumber`; colors `ink` and `accent`; `\florilegiumdraw`, `\florilegiumtextend`, `\florilegiumbloom`, `\florilegiumage`, `\florilegiuminitial`, `\florilegiuminitialfont`, `\florilegiumframe`; the shipout hook. LuaLaTeX only. |
 | `florilegium.lua` | glue: page geometry from TeX dimens, colors, page seed, the TikZ transform (`\pgf@pt@aa..bb`, `\pgf@pt@x/y`), primitive dispatch, the header; text marks (whatsits) and the walk of `\ShipoutBox` that finds them; age; animation frames; the initial's placement and its invisible letter. |
 | `ink.lua` | drawing core: mulberry32 rng, 1-D gradient noise/fbm, OKLCH tone ramp, affine transform stack, path building (`smooth` = Catmull-Rom as Béziers, `taper`, `ribbon`, `blade`, `blob`), fill/stroke/clip with ExtGState opacity + multiply, numbered layers, `flush()` into one `pdf_literal` node. |
 | `flora.lua` | the primitives: `petal flower lily blossom floret bud bell leaf leaflet stem cyme sprig umbel seedhead tendril sparkle rosette hedera ghost`, the visitors `butterfly bee snail bird`, plus `branch_path`. |
 | `grow.lua` | grown composition: regions, grid, stems, marks, visitors on the stems, leaves at nodes, branch loop, falling petals, filler, footer tail; seasons; animation events. Also exports the **motif table** (`M.motifs`) and layer numbers used by `authored.lua`. |
 | `authored.lua` | authored composition: the hand-placed "score" (STEMS, LEAVES, BRANCHES, GHOSTS, VISITORS, SNAIL, ACCENTS, FOOT) for A4 with a 68 mm left margin. |
+| `numeral.lua` | the page number (option `pagenumber`): digits 0–9 as one or two strokes through control points in a unit box (root first, free end curled or with a leaflet), the label's width, the end curl. Drawn by `grow.lua`. |
 | `initial.lua` | decorated initials: glyph outline via `fonts.handlers.otf.readers.loadshapes`, even-odd inside test, clearance grid, the vine over/under the letter, leaflets, flowers in the gaps, tile frame. |
 | `florilegium.tex` / `florilegium-grow.tex` | demo documents (authored / grown). Body text = `text-methods.tex` (+ `text-growth.tex` for grown) + `text-sharing.tex`; it describes the code, so **update it when the method changes**. |
 | `showcase.tex` | "A year in the margin": `[grown,sections,aging]`, an initial, `\florilegiumbloom`; each section describes the feature it shows. Two passes. |
 | `gallery.tex`, `tools/gallery.py` | one short page per variant (`\galleryink`, `\galleryage`) → `gallery/seeds.png` + `seeds.gif`, `inks.png`, `seasons.png`. |
 | `animation.tex`, `tools/animate.py` | growth animation: one page per frame (`\florilegiumframe`), parallel LuaLaTeX jobs, pdftoppm, ffmpeg → `build/grow-N.gif` + `.mp4`. `tools/animcheck.lua` checks that the last frame equals the page. |
 | `tools/Dockerfile`, `tools/in-docker` | TeX Live 2023 image; `make RUN=tools/in-docker` when there's no local TeX. |
-| `postscript/florilegium.ps` | the PostScript port: ink + flora + grow (no animation, initials or authored page) and a two-page text that describes itself, with heading marks and the spill. One file, run by Ghostscript (`make postscript`, local `gs`, not the Docker image) or a printer. Not kept in sync automatically: a change to a primitive or to `grow.lua` has to be made there too. |
+| `postscript/florilegium.ps` | the PostScript port: ink + flora + grow (no animation, initials or authored page) and a two-page text that describes itself, with heading marks and the spill. One file, run by Ghostscript (`make postscript`, local `gs`, not the Docker image) or a printer. Not kept in sync automatically: a change to a primitive or to `grow.lua` has to be made there too. The page number is not ported. |
 
 ## Build
 
@@ -80,8 +81,9 @@ is ~70 KB of path operators, a page ~3 MB uncompressed, ~0.7 MB in the PDF.
   closure, not before it), or the last frame stops matching the page; run
   `tools/animcheck.lua` after touching `grow.lua`.
 - **Separate streams keep old pages stable.** Visitors draw from `ink.rng(seed*7919+101)`,
-  the season's additions from `+211`, the authored visitors from `+103`. With no visitors,
-  no age and no marks a grown page is byte-identical to before those features (check by
+  the season's additions from `+211`, the authored visitors from `+103`, the page number
+  from `+307`. With no visitors, no age, no marks and no page number a grown page is
+  byte-identical to before those features (check by
   comparing against `git show HEAD:grow.lua` etc. in a texlua harness with stubbed TeX).
 - **The last animation frame uses t = ∞**: for the event that ends last,
   `(t0+dur-t0)/dur` can round just below 1 and leave a 95% bloom.
@@ -155,6 +157,17 @@ is ~70 KB of path operators, a page ~3 MB uncompressed, ~0.7 MB in the PDF.
    each frame in painting order. The explained version adds a dashed disc per branch.
    `place(..., path, steps)` moves a motif along `path(e)` instead of opening it (visitors
    fly in, petals fall, the snail crawls with `till_end`).
+12. Page number (`g.number` = `\thepage`, option `pagenumber`; only digits, at most four).
+   Before the main stems: a box at the foot of the column, at most 3 cm tall, centered
+   between root+1.4 cm and the column edge; the main stems lean left of it below its top
+   (no `layout` draws). After the footer stem: each digit's unit box is mapped with y = 0 on
+   the footer stem and a level top; strokes are `stem()` with a width *function* (broad nib
+   at `numeral.NIB`; `flora.stem` takes a function as `w0`), one or two leaflets on the
+   outer side of the first stroke, a leaflet at a `leaf` end. Points in the upper third
+   become stem points (flowers above the number branch from it); the box is filled with
+   proxies. `place` closures use `ink.rng(sd)` with `sd` drawn outside, so the animation
+   replays them; `tools/animcheck.lua` has two page-number cases. Without the option the
+   output is byte-identical.
 
 To add a motif: write the primitive in `flora.lua` (origin at its base or center, axis
 +y, takes `rng`), then add a row to `motifs` in `grow.lua` with `r(s)` (proxy radius),
@@ -173,3 +186,4 @@ can then place it by name, and `\florilegiumbloom[name]` can ask for it.
 - A mirrored right-margin variant for two-sided documents.
 - Form XObjects for repeated sub-shapes (florets) to cut the PDF size further.
 - A density/airiness option (SMALLEST, FILLMIN, caps) exposed in the `.sty`.
+- The page number in the authored composition and the PostScript port; roman numerals.

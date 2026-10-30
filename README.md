@@ -79,10 +79,17 @@ The grown margin can respond to the document around it:
 - **A flower where the text asks.** `\florilegiumbloom` puts a flower beside the line it
   stands in; `\florilegiumbloom[lily]` asks for any motif of the garden. The marks are found
   in the page box when the page is shipped out, so this works in one run.
+- **The page number.** With the option `pagenumber`, the page number grows at the foot of
+  the margin instead of sitting in the footer: every digit is a stem that rises out of the
+  footer stem and ends in a curl or a leaflet, drawn with the thick and thin of a broad nib,
+  and what grows just above the number grows out of it. Arabic page numbers only; take
+  `\thepage` out of your footer.
 - **Seasons.** With the option `aging`, the garden ages from spring on the first page
   (mostly in bud, small pale leaves) to autumn on the last (seed heads, falling petals, a
   few copper leaves). It needs two runs, for the page count; `\florilegiumage{0.8}` sets an
   age by hand instead.
+
+![page numbers 5, 14, 38 and 127](gallery/pagenumbers.png)
 
 ![four initials](gallery/initials.png)
 
@@ -170,7 +177,7 @@ docker build -t florilegium-tex tools
 make RUN=tools/in-docker
 ```
 
-Or paste `florilegium.sty`, the six `.lua` files and one of the `.tex` files into an
+Or paste `florilegium.sty`, the seven `.lua` files and one of the `.tex` files into an
 [Overleaf](https://www.overleaf.com) project and set the compiler to LuaLaTeX.
 
 Use it in your own document:
@@ -178,7 +185,8 @@ Use it in your own document:
 ```latex
 \usepackage[grown]{florilegium}      % or plain \usepackage{florilegium} for the authored one
 % options for the grown one: sections (flowers at the headings), aging (two runs),
-% novisitors (no butterflies, bees, snails or birds)
+% novisitors (no butterflies, bees, snails or birds), pagenumber (the page number
+% grows at the foot of the margin; remove \thepage from the footer)
 \definecolor{ink}{HTML}{5B2A1F}      % optional: the hue of the whole palette (this is sepia)
 \definecolor{accent}{HTML}{B4662F}   % optional: the copper of the hairlines
 ...

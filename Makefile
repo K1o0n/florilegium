@@ -2,7 +2,7 @@ LUALATEX = $(RUN) lualatex -interaction=nonstopmode -halt-on-error
 SEEDS   ?= 1 2 3 4 5 6
 # RUN=tools/in-docker builds inside the florilegium-tex image (see tools/Dockerfile)
 RUN     ?=
-LUA      = ink.lua flora.lua florilegium.lua initial.lua
+LUA      = ink.lua flora.lua florilegium.lua initial.lua numeral.lua
 GS      ?= gs
 SEED    ?= 7
 

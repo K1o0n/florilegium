@@ -179,7 +179,7 @@ local frame, recorded = nil, {}
 function M.frame(k, n, explain) frame = { k = k, n = n, explain = explain == "explain" } end
 
 local function grown_frame(g)
-  local key = string.format("%d %d %.3f %s %d", g.seed, g.spill, g.spilly, tostring(g.age), #g.marks)
+  local key = string.format("%d %d %.3f %s %d %s", g.seed, g.spill, g.spilly, tostring(g.age), #g.marks, tostring(g.number))
   if not recorded[key] then
     g.anim = true
     recorded = { [key] = require("grow").page(g) }      -- keep only the latest garden
@@ -196,11 +196,13 @@ local function grown_frame(g)
 end
 
 -- the grown composition for this page; M.visitors = false (option novisitors)
--- leaves out the butterflies, bees, snails and birds
+-- leaves out the butterflies, bees, snails and birds; `number` (option
+-- pagenumber) is the page label, grown into the foot of the margin if it is
+-- made of digits
 M.visitors = true
-function M.grown(seed, spill, spilly, box)
+function M.grown(seed, spill, spilly, box, number)
   local g = M.geometry()
-  g.seed, g.spill, g.spilly, g.visitors, g.age = seed, spill, spilly, M.visitors, M.age
+  g.seed, g.spill, g.spilly, g.visitors, g.age, g.number = seed, spill, spilly, M.visitors, M.age, number
   g.marks = page_marks(box)
   if frame then grown_frame(g) else require("grow").page(g) end
   M.head(g)

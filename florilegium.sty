@@ -15,6 +15,9 @@
 %%   \usepackage[grown,aging]{florilegium}       the garden ages from spring on the first
 %%                                      page to autumn on the last (two runs: the page
 %%                                      count is read from the .aux of the run before)
+%%   \usepackage[grown,pagenumber]{florilegium}  the page number grows out of the footer
+%%                                      stem at the foot of the margin (arabic \thepage
+%%                                      only; drop the page number from the footer)
 %%   \florilegiumbloom[motif]          (grown) a flower, or any motif of grow.lua, in
 %%                                      the margin beside the current line
 %%   \florilegiumage{a}                (grown) the age of the following pages: 0 spring,
@@ -49,13 +52,18 @@
 \newif\ifflorilegium@visitors \florilegium@visitorstrue
 \newif\ifflorilegium@sections
 \newif\ifflorilegium@aging
+\newif\ifflorilegium@pagenumber
 \DeclareOption{authored}{\florilegium@grownfalse}
 \DeclareOption{grown}{\florilegium@growntrue}
 \DeclareOption{nomargin}{\florilegium@marginfalse}
 \DeclareOption{novisitors}{\florilegium@visitorsfalse}
 \DeclareOption{sections}{\florilegium@sectionstrue}
 \DeclareOption{aging}{\florilegium@agingtrue}
+\DeclareOption{pagenumber}{\florilegium@pagenumbertrue}
 \ProcessOptions\relax
+\ifflorilegium@pagenumber\ifflorilegium@grown\else
+  \PackageWarningNoLine{florilegium}{Option pagenumber works with the grown
+    composition only; add the option grown}\fi\fi
 \ifdefined\florilegiumseed\else\def\florilegiumseed{}\fi
 
 %% ---------------------------------------------------------------- palette
@@ -97,10 +105,12 @@
   \edef\flo@seed{\florilegium@seed}%
   \ifflorilegium@aging\ifdefined\flo@lastpage
     \directlua{florilegium.auto_age(\number\value{page}, \flo@lastpage)}\fi\fi
+  % the page label for option pagenumber, as a Lua string (nil without it)
+  \edef\flo@label{\ifflorilegium@pagenumber"\luaescapestring{\thepage}"\else nil\fi}%
   \ifnum\value{page}=\flo@endpage\relax
-    \directlua{florilegium.grown(\flo@seed, 1, florilegium.geometry().ytop - \number\dimexpr\flo@endtotal\relax * 2.54 / (72.27 * 65536), \number\ShipoutBox)}%
+    \directlua{florilegium.grown(\flo@seed, 1, florilegium.geometry().ytop - \number\dimexpr\flo@endtotal\relax * 2.54 / (72.27 * 65536), \number\ShipoutBox, \flo@label)}%
   \else
-    \directlua{florilegium.grown(\flo@seed, 0, 0, \number\ShipoutBox)}%
+    \directlua{florilegium.grown(\flo@seed, 0, 0, \number\ShipoutBox, \flo@label)}%
   \fi
 \end{tikzpicture}}
 \newcommand\florilegiumtextend{\par

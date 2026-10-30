@@ -491,19 +491,21 @@ end
 
 -- ---------------------------------------------------------------- stems and sprays
 -- a tapered stem along points (local cm), full widths in cm at the base and the tip;
--- with `tip` (cm) its last stretch narrows to a point, as at a growing tip
+-- with `tip` (cm) its last stretch narrows to a point, as at a growing tip. w0 may
+-- also be a function of the fraction of the length (w1 is then ignored).
 function M.stem(pts, w0, w1, c, op, tip)
-  local wbp = (w0 + w1) / 2 * ink.unit() * ink.CM
+  local base = type(w0) == "function" and w0 or function(t) return lerp(w0, w1, t) end
+  local wbp = (type(w0) == "function" and w0(0.5) or (w0 + w1) / 2) * ink.unit() * ink.CM
   if wbp < 0.7 then
     ink.smooth(pts, false)
     ink.stroke(c or tone(0.07), wbp, op)
     return
   end
-  local width = function(t) return lerp(w0, w1, t) end
+  local width = base
   if tip then
     local _, L = ink.arclen(pts)
     local f = math.min(1, tip / math.max(L, 1e-9))
-    width = function(t) return lerp(w0, w1, t) * (t > 1 - f and lerp(1, 0.15, (t - 1 + f) / f) or 1) end
+    width = function(t) return base(t) * (t > 1 - f and lerp(1, 0.15, (t - 1 + f) / f) or 1) end
   end
   ink.smooth(ink.ribbon(pts, width), true)
   ink.fill(c or tone(0.07), op)

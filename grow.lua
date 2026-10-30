@@ -22,6 +22,7 @@
 
 local ink = require("ink")
 local flora = require("flora")
+local numeral = require("numeral")
 local M = {}
 
 local sqrt, cos, sin, atan, pi, floor, max, min, abs = math.sqrt, math.cos, math.sin, math.atan, math.pi, math.floor, math.max, math.min, math.abs
@@ -354,7 +355,11 @@ function M.page(g)
         for i = 1, j do head[i] = pts[i] end
         head[j + 1] = { lerp(pts[j][1], pts[j + 1][1], u), lerp(pts[j][2], pts[j + 1][2], u) }
         ink.tag({ now, k / n, (k + 1) / n })
-        flora.stem(head, w0, lerp(w0, w1, k / n), nil, nil, 0.4)
+        if type(w0) == "function" then
+          flora.stem(head, function(t) return w0(t * k / n) end, nil, nil, nil, 0.4)
+        else
+          flora.stem(head, w0, lerp(w0, w1, k / n), nil, nil, 0.4)
+        end
       end
       ink.tag({ now, 1 })
     end
@@ -413,6 +418,22 @@ function M.page(g)
 
   -- ---------------------------------------------------------- 1. stems
   local root = { layout.range(1.0, 1.6), 0.75 }
+  -- the page number (option pagenumber): a box at the foot of the column, right
+  -- of the root, as tall as fits; the digits stand on the footer stem and the
+  -- main stems lean out of their way. No draws from `layout` here, so the rest
+  -- of the garden keeps its decisions.
+  local num
+  do
+    local W = numeral.width(g.number)
+    if W then
+      local xmin, xr = max(root[1] + 1.4, 2.6), g.colright - 0.25
+      local H = min(3.0, 0.46 * g.colright, (xr - xmin) / W)
+      if H > 0.9 then
+        num = { H = H, x0 = xmin + (xr - xmin - W * H) / 2, ytop = (foot[2] + foot[4]) / 2 - 0.05 + H }
+        num.x1 = num.x0 + W * H
+      end
+    end
+  end
   local cx = g.colright * 0.47
   local amp = g.colright * 0.2
   local mains, mainev = {}, {}
@@ -427,6 +448,10 @@ function M.page(g)
       local x = cx + amp * f(y / lam + ph) + (k - 2) * 0.35
       x = lerp(x0, x, smoothstep(0, 4, y - root[2]))
       x = max(0.9, min(g.colright - 0.9, x))
+      if num then
+        local lim = num.x0 - 0.45
+        if x > lim then x = lerp(x, lim, 1 - smoothstep(num.ytop, num.ytop + 1.6, y)) end
+      end
       pts[#pts + 1] = { x, y }
       y = y + 0.25
     end
@@ -464,6 +489,97 @@ function M.page(g)
     footev = event({ kind = "stem", phase = "stems", off = 0.5 })
     stem(footpts, 0.065, 0.01, 0.06)
     add_stem_points(footpts, 0.065, 0.012)
+  end
+  -- the page number: the unit box of each digit is mapped so that its baseline
+  -- follows the footer stem and its top is level; every stroke is a tapered
+  -- stem from its root, a free end curls or carries a leaflet, and a leaflet or
+  -- two sit on the outer side of the first stroke. Its own random stream, and
+  -- the closures only draw from fresh streams, so the animation replays them.
+  if num then
+    local nrng = ink.rng(g.seed * 7919 + 307)
+    local function fy(x)
+      if x <= footpts[1][1] then return footpts[1][2] end
+      for i = 2, #footpts do
+        local a, b = footpts[i - 1], footpts[i]
+        if x <= b[1] then return lerp(a[2], b[2], (x - a[1]) / (b[1] - a[1])) end
+      end
+      return footpts[#footpts][2]
+    end
+    local H, x, ylo = num.H, num.x0, math.huge
+    local function leaflet(ev, at, px, py, a, ls, bend)
+      local sd = nrng.int(1, 0x3fffffff)
+      event({ kind = "bloom", parent = ev, at = at, size = ls })
+      place(L_LEAF, px, py, a, function() ink.scale(ls) flora.leaflet(ink.rng(sd), { bend = bend }) end)
+    end
+    for i = 1, #g.number do
+      local gl = numeral.glyphs[g.number:sub(i, i)]
+      local function map(p)
+        local px = x + (p[1] + numeral.SLANT * p[2]) * H
+        local y0 = fy(px)
+        ylo = min(ylo, y0)
+        return { px, lerp(y0, num.ytop, p[2]) }
+      end
+      local c = map({ gl.w / 2, 0.5 })
+      local ls0 = min(0.6, max(0.32, 0.19 * H))
+      for k, st in ipairs(gl.strokes) do
+        local ctrl = {}
+        for j, p in ipairs(st) do ctrl[j] = map(j == 1 and p or { p[1] + nrng.sym(0.012), p[2] + nrng.sym(0.012) }) end
+        local pts = ink.catmull(ctrl, 8)
+        local nbody = #pts
+        if st.curl then numeral.curl(pts, st.curl, (k == 1 and 0.075 or 0.06) * H, nrng.range(1.1, 1.4)) end
+        local s, L = ink.arclen(pts)
+        -- a broad nib: the taper of a stem, thicker where the stroke runs across
+        -- the nib's angle and a hairline along it, so the digit reads as lettering
+        local w0, w1 = k == 1 and 0.12 or 0.09, 0.045
+        local wpt = {}
+        for j = 1, #pts do
+          local a, b = pts[max(1, j - 1)], pts[min(#pts, j + 1)]
+          local th = atan(b[2] - a[2], b[1] - a[1]) - numeral.NIB * rad
+          wpt[j] = lerp(w0, w1, (s[j] / L) ^ 1.6) * (0.32 + 0.68 * abs(sin(th)))
+        end
+        local function width(u)
+          local at, lo, hi = u * L, 1, #s
+          while hi - lo > 1 do local mid = (lo + hi) // 2 if s[mid] <= at then lo = mid else hi = mid end end
+          return lerp(wpt[lo], wpt[hi], s[hi] > s[lo] and min(1, max(0, (at - s[lo]) / (s[hi] - s[lo]))) or 0)
+        end
+        local ev = event({ kind = "stem", phase = "stems", off = 0.45 + 0.12 * (i - 1) })
+        stem(pts, width, nil, 0.16)
+        -- the upper part of the digit can carry branches: what grows just above
+        -- the number grows out of it (the box below keeps its inside clear)
+        local run = {}
+        for j = 1, nbody + 1 do
+          local p = pts[j]
+          if j <= nbody and p[2] > c[2] + 0.3 * H then run[#run + 1] = p
+          elseif #run > 2 then add_stem_points(run, 0.05, 0.03, 2) run = {} else run = {} end
+        end
+        local function frame(at)
+          local j = 2
+          while j < #pts - 1 and s[j] < at do j = j + 1 end
+          local tx, ty = norm(pts[j + 1][1] - pts[j - 1][1], pts[j + 1][2] - pts[j - 1][2])
+          return j, tx, ty
+        end
+        if k == 1 then
+          local nl = nrng.int(1, 2)
+          for m = 1, nl do
+            local u = nl == 1 and nrng.range(0.38, 0.6) or (m == 1 and nrng.range(0.22, 0.36) or nrng.range(0.55, 0.7))
+            local j, tx, ty = frame(u * L)
+            local p = pts[j]
+            local side = (p[1] - c[1]) * -ty + (p[2] - c[2]) * tx >= 0 and 1 or -1
+            leaflet(ev, s[j] / L, p[1], p[2], deg(tx, ty) + side * nrng.range(35, 50), ls0 * nrng.range(0.85, 1.05), -side * nrng.range(0.1, 0.25))
+          end
+        end
+        if st.leaf then
+          local p, q = pts[#pts], pts[#pts - 1]
+          local tx, ty = norm(p[1] - q[1], p[2] - q[2])
+          leaflet(ev, 1, p[1], p[2], deg(tx, ty), ls0 * 1.1, nrng.sym(0.15))
+        end
+      end
+      x = x + (gl.w + numeral.GAP) * H
+    end
+    -- keep the digits legible: proxies over their box
+    for bx = num.x0 - 0.1, num.x1 + 0.1, 0.25 do
+      for by = ylo, num.ytop + 0.1, 0.25 do disc(bx, by, 0.2, 1) end
+    end
   end
   -- on the last page, branches arch out of the main stems into the space under
   -- the text, each ending in a flower
